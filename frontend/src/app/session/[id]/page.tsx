@@ -130,13 +130,15 @@ export default function SessionPage() {
     });
 
     return () => {
-      sendMessage(`/app/session/${sessionId}/chat`, {
-        sessionId,
-        senderId: user?.userId,
-        senderName: user?.name,
-        content: `${user?.name} left the session`,
-        type: "LEAVE",
-      });
+      if (user) {
+        sendMessage(`/app/session/${sessionId}/chat`, {
+          sessionId,
+          senderId: user.userId,
+          senderName: user.name,
+          content: `${user.name} left the session`,
+          type: "LEAVE",
+        });
+      }
       disconnectWebSocket();
       setWsConnected(false);
       stopVideo();
@@ -687,11 +689,11 @@ export default function SessionPage() {
                         <p className="text-xs font-semibold text-indigo-400 mb-0.5">{msg.senderName}</p>
                       )}
                       <p className="text-sm break-words leading-relaxed">{msg.content}</p>
-                      {msg.timestamp && (
+                      {msg.timestamp && (() => { const d = new Date(msg.timestamp); return isNaN(d.getTime()) ? null : (
                         <p className={`text-xs mt-0.5 ${isMe ? "text-white/50" : "text-gray-500"}`}>
-                          {new Date(msg.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                          {d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                         </p>
-                      )}
+                      ); })()}
                     </div>
                   </motion.div>
                 );
