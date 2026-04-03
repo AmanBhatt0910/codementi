@@ -32,7 +32,7 @@ export function connectWebSocket(onConnected?: () => void): Client {
 
 export function disconnectWebSocket(): void {
   subscriptions.forEach((sub) => {
-    try { sub.unsubscribe(); } catch { /* ignore */ }
+    try { sub.unsubscribe(); } catch (err) { console.error("Error unsubscribing:", err); }
   });
   subscriptions.length = 0;
   stompClient?.deactivate();

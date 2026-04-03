@@ -89,9 +89,21 @@ public class SessionService {
     public List<SessionResponse> getSessionsForUser(Long userId) {
         List<Session> mentorSessions = sessionRepository.findByMentorIdOrderByCreatedAtDesc(userId);
         List<Session> studentSessions = sessionRepository.findByStudentIdOrderByCreatedAtDesc(userId);
-        mentorSessions.addAll(studentSessions);
-        return mentorSessions.stream()
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+
+        // Merge two sorted (descending) lists into one sorted list in O(n) time
+        List<Session> merged = new java.util.ArrayList<>(mentorSessions.size() + studentSessions.size());
+        int i = 0, j = 0;
+        while (i < mentorSessions.size() && j < studentSessions.size()) {
+            if (!mentorSessions.get(i).getCreatedAt().isBefore(studentSessions.get(j).getCreatedAt())) {
+                merged.add(mentorSessions.get(i++));
+            } else {
+                merged.add(studentSessions.get(j++));
+            }
+        }
+        while (i < mentorSessions.size()) merged.add(mentorSessions.get(i++));
+        while (j < studentSessions.size()) merged.add(studentSessions.get(j++));
+
+        return merged.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }

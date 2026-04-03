@@ -251,7 +251,13 @@ export default function SessionPage() {
           localStreamRef.current = stream;
           if (localVideoRef.current) localVideoRef.current.srcObject = stream;
           stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-        } catch { /* user declined */ }
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "NotAllowedError") {
+            console.info("User denied camera/microphone access");
+          } else {
+            console.error("Failed to access media devices:", err);
+          }
+        }
       }
 
       await pc.setRemoteDescription(new RTCSessionDescription(signal.payload as RTCSessionDescriptionInit));
