@@ -1,11 +1,13 @@
 'use client';
-import { Video } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Video, VideoOff, PhoneOff,
+  PhoneCall, PhoneIncoming, Phone, X,
+  AlertCircle, RefreshCw,
+} from 'lucide-react';
 import type { User } from '@/types';
 import { useCallSession } from '../hooks/useCallSession';
-import { CenterVideoStage } from './CenterVideoStage';
 import { CallControlsBar } from './CallControlsBar';
-import { CallStatusOverlay } from './CallStatusOverlay';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface WebRTCHandle {
   localVideoRef: React.RefObject<HTMLVideoElement>;
@@ -24,128 +26,245 @@ interface WebRTCHandle {
 
 interface VideoCallScreenProps {
   webrtc: WebRTCHandle;
-  /** Local user — accepted for API compatibility; reserved for future use (e.g. local label). */
+  /** Accepted for API compatibility; reserved for future local label display. */
   localUser?: User | null;
   remoteUser?: User;
 }
 
 /**
- * Main video call orchestrator.
+ * Compact inline video call panel for the unified workspace.
  *
- * Idle state   → compact inline strip with "Start call" button.
- * Active/etc.  → fixed full-viewport overlay with:
- *                 - CenterVideoStage (1:1 square, centered)
- *                 - CallStatusOverlay (connecting / disconnected / error)
- *                 - CallControlsBar  (mute / camera / end — shown when active)
+ * All call states (idle, connecting, active, disconnected, error) are
+ * rendered within this panel — no fullscreen overlay is used, so the editor
+ * and chat remain visible and accessible during calls.
+ *
+ * The panel height is controlled by the parent container.
  */
 export function VideoCallScreen({ webrtc, remoteUser }: VideoCallScreenProps) {
   const session = useCallSession(webrtc, remoteUser);
-  const overlayOpen = session.status !== 'idle';
 
   return (
-    <>
-      {/* ── Compact idle strip (rendered inside the 200px container) ───────── */}
-      {!overlayOpen && (
-        <IdleStrip remoteUser={remoteUser} onStartCall={session.startCall} />
-      )}
+    <div className="flex flex-col h-full bg-surface-900/40">
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-white/6 shrink-0">
+        <Video size={13} className="text-brand-400" aria-hidden="true" />
+        <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">Video</span>
 
-      {/* ── Full-viewport overlay (rendered above everything via fixed pos) ── */}
-      <AnimatePresence>
-        {overlayOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
-            role="dialog"
-            aria-label="Video call"
-            aria-modal="true"
-          >
-            <div className="flex flex-col items-center gap-5 w-full max-w-[480px]">
-              {/* 1:1 video stage */}
-              <CenterVideoStage
-                remoteVideoRef={session.remoteVideoRef}
-                localVideoRef={session.localVideoRef}
-                isActive={session.status === 'active'}
-                isCameraOff={session.isCameraOff}
-                remoteParticipant={session.remoteParticipant}
-              >
-                <CallStatusOverlay
-                  status={session.status}
-                  isOutgoing={session.isOutgoingCall}
-                  isIncoming={session.isIncomingCall}
-                  remoteParticipant={session.remoteParticipant}
-                  onAccept={session.acceptCall}
-                  onDecline={session.isIncomingCall ? session.rejectCall : session.endCall}
-                  onRetry={session.startCall}
-                  onClose={session.resetCall}
-                />
-              </CenterVideoStage>
-
-              {/* Controls bar — slides in when the call becomes active */}
-              <AnimatePresence>
-                {session.status === 'active' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <CallControlsBar
-                      isMuted={session.isMuted}
-                      isCameraOff={session.isCameraOff}
-                      onToggleMute={session.toggleMute}
-                      onToggleCamera={session.toggleCamera}
-                      onEndCall={session.endCall}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
-  );
-}
-
-/* ── Idle compact strip ──────────────────────────────────────────────────────── */
-
-function IdleStrip({
-  remoteUser,
-  onStartCall,
-}: {
-  remoteUser?: User;
-  onStartCall: () => void;
-}) {
-  return (
-    <div className="flex h-full items-center justify-between gap-3 bg-surface-900/40 px-4">
-      <div className="flex items-center gap-3 min-w-0">
-        {remoteUser ? (
-          <>
-            <div
-              className="w-9 h-9 rounded-full bg-brand-500/15 flex items-center justify-center text-sm font-semibold text-brand-300 select-none shrink-0"
-              aria-hidden="true"
-            >
-              {remoteUser.name.charAt(0).toUpperCase()}
-            </div>
-            <p className="text-xs text-white/50 truncate">{remoteUser.name}</p>
-          </>
-        ) : (
-          <p className="text-xs text-white/30">No participant yet</p>
+        {session.status === 'active' && (
+          <div className="ml-auto flex items-center gap-1.5" aria-label="Call active">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs text-emerald-400/80">Live</span>
+          </div>
         )}
       </div>
 
-      <button
-        type="button"
-        onClick={onStartCall}
-        aria-label="Start video call"
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 rounded-lg text-xs font-medium border border-brand-500/20 transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+      {/* ── Video area ──────────────────────────────────────────────────── */}
+      <div className="relative flex-1 min-h-0 bg-black/40 overflow-hidden">
+        {/* Remote video stream */}
+        <video
+          ref={session.remoteVideoRef}
+          autoPlay
+          playsInline
+          aria-label="Remote participant video"
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+            session.status === 'active' ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+
+        {/* Avatar placeholder when remote video is not live */}
+        {session.status !== 'active' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            {session.remoteParticipant ? (
+              <>
+                <div
+                  className="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center text-lg font-bold text-brand-300 select-none"
+                  aria-hidden="true"
+                >
+                  {session.remoteParticipant.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-xs text-white/40">{session.remoteParticipant.name}</span>
+              </>
+            ) : (
+              <Video size={20} className="text-white/15" aria-hidden="true" />
+            )}
+          </div>
+        )}
+
+        {/* Local video PiP */}
+        <div
+          className="absolute bottom-2 right-2 w-20 h-14 rounded-lg overflow-hidden bg-black/60 border border-white/10 shadow-lg"
+          aria-label="Your camera preview"
+        >
+          <video
+            ref={session.localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+          />
+          {session.isCameraOff && (
+            <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
+              <VideoOff size={12} className="text-white/40" aria-hidden="true" />
+            </div>
+          )}
+        </div>
+
+        {/* Call state overlays */}
+        <AnimatePresence>
+          {session.status === 'connecting' && (
+            <motion.div
+              key="connecting"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-3"
+              role="status"
+              aria-live="polite"
+            >
+              {session.isOutgoingCall && (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-brand-500/20 ring-pulse flex items-center justify-center">
+                    <PhoneCall size={20} className="text-brand-300" aria-hidden="true" />
+                  </div>
+                  <p className="text-xs text-white/60">
+                    Calling{session.remoteParticipant ? ` ${session.remoteParticipant.name}` : ''}…
+                  </p>
+                  <button
+                    type="button"
+                    onClick={session.endCall}
+                    aria-label="Cancel call"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-full text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                  >
+                    <PhoneOff size={12} aria-hidden="true" /> Cancel
+                  </button>
+                </>
+              )}
+
+              {session.isIncomingCall && (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-brand-500/20 ring-pulse flex items-center justify-center">
+                    <PhoneIncoming size={20} className="text-brand-300" aria-hidden="true" />
+                  </div>
+                  <p className="text-xs text-white/60">
+                    {session.remoteParticipant?.name ?? 'Someone'} is calling…
+                  </p>
+                  <div className="flex gap-2.5">
+                    <button
+                      type="button"
+                      onClick={session.rejectCall}
+                      aria-label="Decline call"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-full text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                    >
+                      <X size={12} aria-hidden="true" /> Decline
+                    </button>
+                    <button
+                      type="button"
+                      onClick={session.acceptCall}
+                      aria-label="Accept call"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/80 hover:bg-emerald-500 text-white rounded-full text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                    >
+                      <Phone size={12} aria-hidden="true" /> Answer
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          )}
+
+          {session.status === 'disconnected' && (
+            <motion.div
+              key="disconnected"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-3"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="w-10 h-10 rounded-full bg-surface-700 flex items-center justify-center">
+                <PhoneOff size={18} className="text-white/50" aria-hidden="true" />
+              </div>
+              <p className="text-xs text-white/60">Call ended</p>
+              <button
+                type="button"
+                onClick={session.resetCall}
+                aria-label="Close call panel"
+                className="px-3 py-1.5 glass hover:bg-white/10 text-white/70 hover:text-white rounded-full text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              >
+                Close
+              </button>
+            </motion.div>
+          )}
+
+          {session.status === 'error' && (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-3"
+              role="alert"
+              aria-live="assertive"
+            >
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                <AlertCircle size={18} className="text-red-400" aria-hidden="true" />
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-white/80">Connection failed</p>
+                <p className="text-xs text-white/35 mt-0.5">Check camera &amp; microphone</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={session.resetCall}
+                  aria-label="Close error"
+                  className="px-3 py-1.5 glass hover:bg-white/10 text-white/70 rounded-full text-xs transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={session.startCall}
+                  aria-label="Retry call"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500/80 hover:bg-brand-500 text-white rounded-full text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                >
+                  <RefreshCw size={11} aria-hidden="true" /> Retry
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Controls bar ────────────────────────────────────────────────── */}
+      <div
+        role="toolbar"
+        aria-label="Video call controls"
+        className="flex items-center justify-center py-2.5 px-3 border-t border-white/6 shrink-0 min-h-[52px]"
       >
-        <Video size={12} />
-        Call
-      </button>
+        {session.status === 'active' ? (
+          <CallControlsBar
+            isMuted={session.isMuted}
+            isCameraOff={session.isCameraOff}
+            onToggleMute={session.toggleMute}
+            onToggleCamera={session.toggleCamera}
+            onEndCall={session.endCall}
+          />
+        ) : session.status === 'idle' ? (
+          <button
+            type="button"
+            onClick={session.startCall}
+            aria-label="Start video call"
+            className="flex items-center gap-2 px-4 py-2 bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 rounded-lg text-xs font-medium border border-brand-500/20 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          >
+            <Video size={13} aria-hidden="true" />
+            Start call
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

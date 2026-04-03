@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import type { editor } from 'monaco-editor';
 import type * as Y from 'yjs';
 import type { MonacoBinding } from 'y-monaco';
-import { ChevronDown, Code2 } from 'lucide-react';
+import { ChevronDown, Code2, Play } from 'lucide-react';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -32,6 +32,10 @@ interface CollaborativeEditorProps {
   initialContent: string;
   initialLanguage: string;
   onCodeChange: (content: string, language: string) => void;
+  /** Called when the user clicks Run. Provides current code and language. */
+  onRun?: (code: string, language: string) => void;
+  /** When true, the Run button shows a loading state and is disabled. */
+  isRunning?: boolean;
 }
 
 export const CollaborativeEditor = forwardRef<CollaborativeEditorHandle, CollaborativeEditorProps>(
@@ -42,6 +46,8 @@ function CollaborativeEditor({
   initialContent,
   initialLanguage,
   onCodeChange,
+  onRun,
+  isRunning = false,
 }, ref) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const ydocRef = useRef<Y.Doc | null>(null);
@@ -232,6 +238,20 @@ function CollaborativeEditor({
         >
           Wrap
         </button>
+
+        {/* Run button */}
+        {onRun && (
+          <button
+            type="button"
+            onClick={() => onRun(editorRef.current?.getValue() ?? '', language)}
+            disabled={isRunning}
+            aria-label={isRunning ? 'Running…' : 'Run code'}
+            className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed text-emerald-300 rounded-lg text-xs font-medium border border-emerald-500/20 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+          >
+            <Play size={11} aria-hidden="true" className={isRunning ? 'animate-pulse' : ''} />
+            {isRunning ? 'Running…' : 'Run'}
+          </button>
+        )}
       </div>
 
       {/* Monaco */}
