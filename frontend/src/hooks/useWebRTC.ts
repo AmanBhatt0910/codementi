@@ -22,7 +22,7 @@ export function useWebRTC({ sessionId, userId, sendSignal }: UseWebRTCOptions) {
   const localStreamRef = useRef<MediaStream | null>(null);
 
   const [callState, setCallState] = useState<
-    'idle' | 'calling' | 'ringing' | 'active' | 'ended'
+    'idle' | 'calling' | 'ringing' | 'active' | 'ended' | 'error'
   >('idle');
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
@@ -84,6 +84,7 @@ export function useWebRTC({ sessionId, userId, sendSignal }: UseWebRTCOptions) {
       setCallState('calling');
     } catch (err) {
       console.error('Error starting call:', err);
+      setCallState('error');
     }
   }, [createPeerConnection, sendSignal, sessionId, userId]);
 
@@ -115,6 +116,7 @@ export function useWebRTC({ sessionId, userId, sendSignal }: UseWebRTCOptions) {
       setCallState('active');
     } catch (err) {
       console.error('Error accepting call:', err);
+      setCallState('error');
     }
   }, [createPeerConnection, sendSignal, sessionId, userId]);
 
@@ -176,10 +178,23 @@ export function useWebRTC({ sessionId, userId, sendSignal }: UseWebRTCOptions) {
         localStreamRef.current?.getTracks().forEach(t => t.stop());
         peerConnectionRef.current?.close();
         peerConnectionRef.current = null;
-        setCallState('idle');
+        localStreamRef.current = null;
+        if (localVideoRef.current) localVideoRef.current.srcObject = null;
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+        setCallState('ended');
         break;
     }
   }, [userId]);
+
+  const resetCall = useCallback(() => {
+    localStreamRef.current?.getTracks().forEach(t => t.stop());
+    peerConnectionRef.current?.close();
+    peerConnectionRef.current = null;
+    localStreamRef.current = null;
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    setCallState('idle');
+  }, []);
 
   const toggleMute = useCallback(() => {
     if (localStreamRef.current) {
@@ -218,6 +233,7 @@ export function useWebRTC({ sessionId, userId, sendSignal }: UseWebRTCOptions) {
     acceptPendingCall,
     rejectCall,
     endCall,
+    resetCall,
     handleSignal,
     toggleMute,
     toggleCamera,
