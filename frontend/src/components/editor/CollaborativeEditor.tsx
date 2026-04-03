@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import dynamic from 'next/dynamic';
 import type { editor } from 'monaco-editor';
 import type * as Y from 'yjs';
@@ -21,6 +21,10 @@ const LANGUAGES = [
   { id: 'sql', label: 'SQL' },
 ];
 
+export interface CollaborativeEditorHandle {
+  applyRemoteUpdate: (content: string, language?: string) => void;
+}
+
 interface CollaborativeEditorProps {
   sessionId: string;
   userId: string;
@@ -30,14 +34,15 @@ interface CollaborativeEditorProps {
   onCodeChange: (content: string, language: string) => void;
 }
 
-export function CollaborativeEditor({
+export const CollaborativeEditor = forwardRef<CollaborativeEditorHandle, CollaborativeEditorProps>(
+function CollaborativeEditor({
   sessionId,
   userId,
   userName,
   initialContent,
   initialLanguage,
   onCodeChange,
-}: CollaborativeEditorProps) {
+}, ref) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const ydocRef = useRef<Y.Doc | null>(null);
   const bindingRef = useRef<MonacoBinding | null>(null);
@@ -153,7 +158,8 @@ export function CollaborativeEditor({
   }, [initialContent]);
 
   // Apply remote code update
-  const applyRemoteUpdate = useCallback((content: string) => {
+  const applyRemoteUpdate = useCallback((content: string, lang?: string) => {
+    if (lang) setLanguage(lang);
     const ydoc = ydocRef.current;
     if (!ydoc || !content) return;
     const yText = ydoc.getText('monaco');
@@ -167,9 +173,10 @@ export function CollaborativeEditor({
     isRemoteUpdateRef.current = false;
   }, []);
 
-  // Expose remote update for parent via ref... handled in parent's onCode handler instead
-  // The parent sets codeSnapshot.content, but the editor only uses it on mount
-  // For live sync, onCodeChange broadcasts and applyRemoteUpdate is called externally
+  // Expose applyRemoteUpdate to parent via ref
+  useImperativeHandle(ref, () => ({
+    applyRemoteUpdate,
+  }), [applyRemoteUpdate]);
 
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
@@ -251,4 +258,6 @@ export function CollaborativeEditor({
       </div>
     </div>
   );
-}
+});
+
+CollaborativeEditor.displayName = 'CollaborativeEditor';
