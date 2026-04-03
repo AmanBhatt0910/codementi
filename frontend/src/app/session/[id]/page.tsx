@@ -137,6 +137,7 @@ export default function SessionPage() {
     });
 
     return () => {
+      // user is captured from closure at effect-run time (user is non-null since effect depends on user)
       if (user) {
         sendMessage(`/app/session/${sessionId}/chat`, {
           sessionId,
@@ -320,6 +321,7 @@ export default function SessionPage() {
           if (localVideoRef.current) localVideoRef.current.srcObject = stream;
           stream.getTracks().forEach((t) => pc.addTrack(t, stream));
         } catch (err) {
+          // Suppress NotAllowedError - user intentionally denied camera/microphone access
           if (!(err instanceof DOMException && err.name === "NotAllowedError")) {
             console.error("Failed to access media devices:", err);
           }

@@ -111,7 +111,10 @@ body {
   @apply outline-none border-indigo-500/70 ring-2 ring-indigo-500/20;
 }
 
-/* Button shine effect */
+/* Session card */
+.session-card {
+  background: linear-gradient(135deg, rgba(17,24,39,0.8) 0%, rgba(15,20,35,0.8) 100%);
+}
 .btn-primary {
   position: relative;
   overflow: hidden;

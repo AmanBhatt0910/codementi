@@ -72,10 +72,7 @@ function SessionCard({ session, userId, onCopyToken }: {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gray-900/60 rounded-xl p-5 border border-gray-800 hover:border-indigo-500/30 transition-all duration-200 group"
-      style={{
-        background: "linear-gradient(135deg, rgba(17,24,39,0.8) 0%, rgba(15,20,35,0.8) 100%)"
-      }}
+      className="session-card rounded-xl p-5 border border-gray-800 hover:border-indigo-500/30 transition-all duration-200 group"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-4 min-w-0">
