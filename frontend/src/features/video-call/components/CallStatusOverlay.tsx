@@ -1,5 +1,5 @@
 'use client';
-import { Loader2, PhoneCall, PhoneIncoming, PhoneOff, AlertCircle, Phone, X, RefreshCw } from 'lucide-react';
+import { PhoneCall, PhoneIncoming, PhoneOff, AlertCircle, Phone, X, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CallParticipant, CallStatus } from '../domain/types';
 
@@ -212,9 +212,4 @@ function ErrorView({
       </div>
     </>
   );
-}
-
-/** Inline spinner used in connecting states that don't show the ring-pulse. */
-export function ConnectingSpinner() {
-  return <Loader2 size={24} className="animate-spin text-brand-400" aria-label="Connecting" />;
 }

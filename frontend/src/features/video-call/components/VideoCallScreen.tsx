@@ -24,7 +24,8 @@ interface WebRTCHandle {
 
 interface VideoCallScreenProps {
   webrtc: WebRTCHandle;
-  localUser: User | null;
+  /** Local user — accepted for API compatibility; reserved for future use (e.g. local label). */
+  localUser?: User | null;
   remoteUser?: User;
 }
 
