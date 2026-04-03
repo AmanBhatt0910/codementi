@@ -12,6 +12,8 @@ import { CollaborativeEditor, CollaborativeEditorHandle } from '@/components/edi
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { VideoCallScreen } from '@/features/video-call';
 import { SessionHeader } from '@/components/layout/SessionHeader';
+import { OutputConsole } from '@/features/collab-workspace/components/OutputConsole';
+import { useCodeExecution } from '@/features/collab-workspace/hooks/useCodeExecution';
 import toast from 'react-hot-toast';
 
 export default function SessionPage() {
@@ -28,7 +30,18 @@ export default function SessionPage() {
 
   const [loading, setLoading] = useState(true);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [outputOpen, setOutputOpen] = useState(false);
   const editorRef = useRef<CollaborativeEditorHandle>(null);
+
+  // Code execution
+  const { state: execState, run: runCode, clear: clearOutput } = useCodeExecution();
+
+  // Auto-open output panel when execution finishes
+  useEffect(() => {
+    if (execState.status === 'success' || execState.status === 'error') {
+      setOutputOpen(true);
+    }
+  }, [execState.status]);
 
   // Load session + history on mount
   useEffect(() => {
@@ -51,8 +64,6 @@ export default function SessionPage() {
     return () => setCurrentSession(null);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // WebRTC — created first so its sendSignal can be passed to useStomp
-  // We use a stable ref-based approach: define handleSignal before useStomp
   const [signalingReady, setSignalingReady] = useState(false);
 
   const handleChat = useCallback((msg: unknown) => {
@@ -62,7 +73,7 @@ export default function SessionPage() {
   const handleCode = useCallback((update: unknown) => {
     const u = update as CodeUpdate;
     if (u.senderId !== user?.id) {
-      setCodeSnapshot({ content: u.content, language: u.language });
+      setCodeSnapshot({ content: u.content ?? '', language: u.language ?? 'javascript' });
       if (u.content !== undefined) {
         editorRef.current?.applyRemoteUpdate(u.content, u.language);
       }
@@ -82,7 +93,6 @@ export default function SessionPage() {
     }
   }, [user?.id, setPeerOnline, updateSession, id]);
 
-  // Single useStomp instance — sendSignal forwarded to webrtc after it's ready
   const { sendChat, sendCode, sendSignal } = useStomp({
     sessionId: id,
     token,
@@ -90,22 +100,18 @@ export default function SessionPage() {
     onCode: handleCode,
     onEvent: handleEvent,
     onSignal: (signal: unknown) => {
-      // Forward to webrtc handler via stable callback ref
       webrtcHandleSignalRef.current?.(signal as SignalingMessage);
     },
     onConnected: () => setWsConnected(true),
     onDisconnected: () => setWsConnected(false),
   });
 
-  // WebRTC
   const webrtc = useWebRTC({
     sessionId: id,
     userId: user?.id || '',
     sendSignal,
   });
 
-  // Store webrtc.handleSignal in a ref so the STOMP onSignal callback above
-  // can call it without needing to re-create the STOMP connection
   const webrtcHandleSignalRef = { current: webrtc.handleSignal };
 
   const copyCode = () => {
@@ -126,6 +132,14 @@ export default function SessionPage() {
 
   if (!currentSession) return null;
 
+  const remoteUser =
+    currentSession.student?.id === user?.id
+      ? currentSession.mentor
+      : currentSession.student;
+
+  // Output panel height: collapsed = header only (36px), expanded = 180px
+  const outputHeight = outputOpen ? 180 : 36;
+
   return (
     <div className="flex flex-col h-screen bg-surface-950">
       <SessionHeader
@@ -145,9 +159,16 @@ export default function SessionPage() {
         }}
       />
 
-      <div className="flex-1 grid grid-cols-[1fr_340px] overflow-hidden">
-        <div className="flex flex-col overflow-hidden border-r border-white/6">
-          <div className="flex-1 overflow-hidden">
+      {/*
+       * Unified workspace: editor + output (left) | video + chat (right)
+       * All three panels are visible simultaneously — no separate focus view.
+       */}
+      <div className="flex-1 grid grid-cols-[1fr_320px] overflow-hidden min-h-0">
+
+        {/* ── Left pane: Code editor + Output console ──────────────────── */}
+        <div className="flex flex-col overflow-hidden border-r border-white/6 min-h-0">
+          {/* Editor (flex-1, fills remaining height) */}
+          <div className="flex-1 min-h-0 overflow-hidden">
             <CollaborativeEditor
               ref={editorRef}
               sessionId={id}
@@ -158,27 +179,49 @@ export default function SessionPage() {
               onCodeChange={(content, language) => {
                 sendCode({ type: 'CODE_UPDATE', content, language });
               }}
+              onRun={runCode}
+              isRunning={execState.status === 'running'}
             />
           </div>
-          <div className="h-[200px] border-t border-white/6 flex-shrink-0">
-            <VideoCallScreen
-              webrtc={webrtc}
-              localUser={user}
-              remoteUser={
-                currentSession.student?.id === user?.id
-                  ? currentSession.mentor
-                  : currentSession.student
-              }
+
+          {/* Output console — collapsible, auto-expands on execution result */}
+          <div
+            className="border-t border-white/6 shrink-0 overflow-hidden transition-[height] duration-200 ease-in-out"
+            style={{ height: outputHeight }}
+          >
+            <OutputConsole
+              status={execState.status}
+              output={execState.output}
+              error={execState.error}
+              exitCode={execState.exitCode}
+              isOpen={outputOpen}
+              onToggle={() => setOutputOpen(o => !o)}
+              onClear={clearOutput}
             />
           </div>
         </div>
 
-        <ChatPanel
-          messages={messages}
-          currentUserId={user?.id || ''}
-          onSend={sendChat}
-          session={currentSession}
-        />
+        {/* ── Right pane: Video call + Chat ────────────────────────────── */}
+        <div className="flex flex-col overflow-hidden min-h-0">
+          {/* Compact inline video call panel */}
+          <div className="h-[260px] shrink-0 border-b border-white/6">
+            <VideoCallScreen
+              webrtc={webrtc}
+              localUser={user}
+              remoteUser={remoteUser}
+            />
+          </div>
+
+          {/* Chat panel fills remaining space */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <ChatPanel
+              messages={messages}
+              currentUserId={user?.id || ''}
+              onSend={sendChat}
+              session={currentSession}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
