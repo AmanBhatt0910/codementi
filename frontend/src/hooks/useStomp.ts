@@ -29,6 +29,20 @@ export function useStomp({
   const subscriptionsRef = useRef<StompSubscription[]>([]);
   const reconnectCountRef = useRef(0);
 
+  // Keep callback refs up-to-date without triggering reconnection on every render
+  const onChatRef = useRef(onChat);
+  const onCodeRef = useRef(onCode);
+  const onSignalRef = useRef(onSignal);
+  const onEventRef = useRef(onEvent);
+  const onConnectedRef = useRef(onConnected);
+  const onDisconnectedRef = useRef(onDisconnected);
+  onChatRef.current = onChat;
+  onCodeRef.current = onCode;
+  onSignalRef.current = onSignal;
+  onEventRef.current = onEvent;
+  onConnectedRef.current = onConnected;
+  onDisconnectedRef.current = onDisconnected;
+
   const connect = useCallback(() => {
     if (!token || !sessionId) return;
 
@@ -44,29 +58,29 @@ export function useStomp({
 
         const subs: StompSubscription[] = [];
 
-        if (onChat) {
+        if (onChatRef.current) {
           subs.push(client.subscribe(`/topic/session/${sessionId}/chat`, (msg: IMessage) => {
-            onChat(JSON.parse(msg.body));
+            onChatRef.current!(JSON.parse(msg.body));
           }));
         }
-        if (onCode) {
+        if (onCodeRef.current) {
           subs.push(client.subscribe(`/topic/session/${sessionId}/code`, (msg: IMessage) => {
-            onCode(JSON.parse(msg.body));
+            onCodeRef.current!(JSON.parse(msg.body));
           }));
         }
-        if (onSignal) {
+        if (onSignalRef.current) {
           subs.push(client.subscribe(`/topic/session/${sessionId}/signal`, (msg: IMessage) => {
-            onSignal(JSON.parse(msg.body));
+            onSignalRef.current!(JSON.parse(msg.body));
           }));
         }
-        if (onEvent) {
+        if (onEventRef.current) {
           subs.push(client.subscribe(`/topic/session/${sessionId}/events`, (msg: IMessage) => {
-            onEvent(JSON.parse(msg.body));
+            onEventRef.current!(JSON.parse(msg.body));
           }));
         }
 
         subscriptionsRef.current = subs;
-        onConnected?.();
+        onConnectedRef.current?.();
 
         // Announce join
         client.publish({
@@ -77,7 +91,7 @@ export function useStomp({
       onDisconnect: () => {
         reconnectCountRef.current++;
         console.log('[STOMP] Disconnected');
-        onDisconnected?.();
+        onDisconnectedRef.current?.();
       },
       onStompError: (frame) => {
         console.error('[STOMP] Error:', frame.headers['message']);
@@ -86,7 +100,7 @@ export function useStomp({
 
     client.activate();
     clientRef.current = client;
-  }, [sessionId, token, onChat, onCode, onSignal, onEvent, onConnected, onDisconnected]);
+  }, [sessionId, token]); // callbacks are accessed via refs — only reconnect when session or token changes
 
   useEffect(() => {
     connect();
