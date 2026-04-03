@@ -10,7 +10,7 @@ import { useWebRTC } from '@/hooks/useWebRTC';
 import { ChatMessage, CodeUpdate, SessionEvent, SignalingMessage } from '@/types';
 import { CollaborativeEditor, CollaborativeEditorHandle } from '@/components/editor/CollaborativeEditor';
 import { ChatPanel } from '@/components/chat/ChatPanel';
-import { VideoPanel } from '@/components/video/VideoPanel';
+import { VideoCallScreen } from '@/features/video-call';
 import { SessionHeader } from '@/components/layout/SessionHeader';
 import toast from 'react-hot-toast';
 
@@ -161,7 +161,7 @@ export default function SessionPage() {
             />
           </div>
           <div className="h-[200px] border-t border-white/6 flex-shrink-0">
-            <VideoPanel
+            <VideoCallScreen
               webrtc={webrtc}
               localUser={user}
               remoteUser={
