@@ -5,6 +5,29 @@ export interface ExecutionResult {
   exitCode: number;
 }
 
+const getFileName = (language: string): string => {
+  switch (language) {
+    case 'javascript': return 'main.js';
+    case 'typescript': return 'main.ts';
+    case 'python': return 'main.py';
+    case 'java': return 'Main.java';
+    case 'cpp': return 'main.cpp';
+    case 'go': return 'main.go';
+    case 'rust': return 'main.rs';
+    default: return 'main.txt';
+  }
+};
+
+const LANGUAGE_ALIAS: Record<string, string> = {
+  javascript: 'js',
+  typescript: 'ts',
+  python: 'python',
+  java: 'java',
+  cpp: 'cpp',
+  go: 'go',
+  rust: 'rust',
+};
+
 /** Contract that any execution backend must implement. */
 export interface ExecutionAdapter {
   execute(code: string, language: string): Promise<ExecutionResult>;
@@ -44,50 +67,64 @@ interface PistonResponse {
  */
 export const pistonAdapter: ExecutionAdapter = {
   supportsLanguage(language: string): boolean {
-    return language in PISTON_RUNTIMES;
+    return language in LANGUAGE_ALIAS;
   },
 
   async execute(code: string, language: string): Promise<ExecutionResult> {
-    const runtime = PISTON_RUNTIMES[language];
-    if (!runtime) {
+    const alias = LANGUAGE_ALIAS[language];
+
+    if (!alias) {
       return {
         stdout: '',
-        stderr: `Language "${language}" is not supported for execution. Supported: ${Object.keys(PISTON_RUNTIMES).join(', ')}.`,
+        stderr: `Unsupported language: ${language}`,
         exitCode: 1,
       };
     }
 
-    let response: Response;
     try {
-      response = await fetch('https://emkc.org/api/v2/piston/execute', {
+      const response = await fetch('http://localhost:8080/api/execute', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          language: runtime.language,
-          version: runtime.version,
-          files: [{ name: 'main', content: code }],
+          language: alias,
+          version: '*',
+          files: [
+            {
+              name: getFileName(language),
+              content: code,
+            },
+          ],
+          stdin: '',
+          args: [],
+          compile_timeout: 10000,
+          run_timeout: 3000,
         }),
-        signal: AbortSignal.timeout(30_000),
       });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Network error';
-      return { stdout: '', stderr: `Execution service unreachable: ${message}`, exitCode: -1 };
-    }
 
-    if (!response.ok) {
+      if (!response.ok) {
+        return {
+          stdout: '',
+          stderr: `Execution API error: ${response.status}`,
+          exitCode: -1,
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        stdout: data.run?.stdout ?? '',
+        stderr: data.run?.stderr ?? '',
+        exitCode: data.run?.code ?? -1,
+      };
+
+    } catch (err) {
       return {
         stdout: '',
-        stderr: `Execution API responded with status ${response.status}.`,
+        stderr: err instanceof Error ? err.message : 'Execution failed',
         exitCode: -1,
       };
     }
-
-    const data: PistonResponse = await response.json();
-    const run = data.run ?? {};
-    return {
-      stdout: run.stdout ?? '',
-      stderr: run.stderr ?? '',
-      exitCode: run.code ?? 0,
-    };
   },
 };
