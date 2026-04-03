@@ -1,500 +1,279 @@
-"use client";
-
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import toast from "react-hot-toast";
-import {
-  HiSparkles, HiPlus, HiLogout, HiClock, HiCheckCircle,
-  HiExclamationCircle, HiClipboardCopy, HiExternalLink,
-  HiUsers, HiCode, HiVideoCamera, HiChartBar, HiX,
-} from "react-icons/hi";
-import { getAuth, clearAuth } from "@/lib/auth";
-import { sessionApi } from "@/lib/apiClient";
-import { SessionResponse, AuthResponse } from "@/types";
-
-function formatDate(dateStr: string | null | undefined): string | null {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
-// Skeleton card for loading state
-function SkeletonCard() {
-  return (
-    <div className="bg-gray-900/50 rounded-xl p-5 border border-gray-800">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="skeleton w-16 h-6 rounded-full" />
-          <div>
-            <div className="skeleton w-32 h-4 mb-2" />
-            <div className="skeleton w-48 h-3" />
-          </div>
-        </div>
-        <div className="skeleton w-16 h-8 rounded-lg" />
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`bg-gray-900/50 rounded-xl p-5 border border-gray-800 hover:border-gray-700 transition-all duration-200`}
-    >
-      <div className={`inline-flex p-2.5 rounded-lg ${color} mb-3`}>
-        <span className="text-xl">{icon}</span>
-      </div>
-      <p className="text-2xl font-bold text-white">{value}</p>
-      <p className="text-sm text-gray-400 mt-0.5">{label}</p>
-    </motion.div>
-  );
-}
-
-function SessionCard({ session, userId, onCopyToken }: {
-  session: SessionResponse;
-  userId: number;
-  onCopyToken: (token: string) => void;
-}) {
-  const statusConfig = {
-    ACTIVE: { color: "text-green-400", bg: "bg-green-400/10 border-green-500/30", dot: "bg-green-400" },
-    PENDING: { color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-500/30", dot: "bg-yellow-400" },
-    ENDED: { color: "text-gray-400", bg: "bg-gray-400/10 border-gray-500/30", dot: "bg-gray-500" },
-  };
-  const cfg = statusConfig[session.status] || statusConfig.ENDED;
-  const isMentor = session.mentorId === userId;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="session-card rounded-xl p-5 border border-gray-800 hover:border-indigo-500/30 transition-all duration-200 group"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-4 min-w-0">
-          {/* Status badge */}
-          <div className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${cfg.bg} ${cfg.color}`}>
-            <div className={`w-1.5 h-1.5 rounded-full pulse-dot ${cfg.dot}`} />
-            {session.status}
-          </div>
-
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-white font-semibold text-sm truncate">
-                Session #{session.id}
-              </p>
-              <span className={`text-xs px-1.5 py-0.5 rounded-md ${isMentor ? "bg-indigo-600/20 text-indigo-400" : "bg-purple-600/20 text-purple-400"}`}>
-                {isMentor ? "Mentor" : "Student"}
-              </span>
-            </div>
-            <p className="text-gray-500 text-xs mt-0.5 truncate">
-              {isMentor
-                ? session.studentName ? `With ${session.studentName}` : "Waiting for student…"
-                : `With ${session.mentorName}`}
-            </p>
-            {formatDate(session.createdAt) && (
-              <p className="text-gray-600 text-xs mt-0.5 flex items-center gap-1">
-                <HiClock className="text-xs" />
-                {formatDate(session.createdAt)}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Copy token */}
-          {session.inviteToken && session.status !== "ENDED" && (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => onCopyToken(session.inviteToken)}
-              className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white transition-all"
-              title="Copy invite token"
-            >
-              <HiClipboardCopy className="text-sm" />
-            </motion.button>
-          )}
-          {session.status !== "ENDED" && (
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Link
-                href={`/session/${session.id}`}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 text-sm font-medium transition-all"
-              >
-                <HiExternalLink className="text-xs" />
-                Open
-              </Link>
-            </motion.div>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function JoinModal({ onClose, onJoin }: { onClose: () => void; onJoin: (token: string) => Promise<void> }) {
-  const [token, setToken] = useState("");
-  const [joining, setJoining] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token.trim()) return;
-    setJoining(true);
-    try {
-      await onJoin(token.trim());
-    } finally {
-      setJoining(false);
-    }
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        transition={{ type: "spring", bounce: 0.2 }}
-        className="glass rounded-2xl p-6 w-full max-w-md shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-white">Join a Session</h3>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
-          >
-            <HiX />
-          </button>
-        </div>
-        <p className="text-sm text-gray-400 mb-4">Enter the invite token shared by your mentor.</p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="Paste invite token here…"
-            className="input-premium font-mono text-sm"
-            autoFocus
-          />
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 transition-colors text-sm font-medium"
-            >
-              Cancel
-            </button>
-            <motion.button
-              type="submit"
-              disabled={joining || !token.trim()}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white font-semibold text-sm transition-all"
-            >
-              {joining ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Joining…
-                </span>
-              ) : "Join Session"}
-            </motion.button>
-          </div>
-        </form>
-      </motion.div>
-    </motion.div>
-  );
-}
+'use client';
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Plus, LogIn, Clock, Users, Code2, ArrowRight, Loader2, Hash } from 'lucide-react';
+import { useAuthStore } from '@/store/authStore';
+import { useSessionStore } from '@/store/sessionStore';
+import { sessionsApi } from '@/lib/api';
+import { Session } from '@/types';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { formatDistanceToNow } from 'date-fns';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<AuthResponse | null>(null);
-  const [sessions, setSessions] = useState<SessionResponse[]>([]);
+  const { user } = useAuthStore();
+  const { sessions, setSessions, addSession } = useSessionStore();
+
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
-
-  const loadSessions = useCallback(async () => {
-    try {
-      const data = await sessionApi.getMy();
-      setSessions(data);
-    } catch {
-      // non-critical
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [sessionTitle, setSessionTitle] = useState('');
+  const [joinCode, setJoinCode] = useState('');
 
   useEffect(() => {
-    const auth = getAuth();
-    if (!auth) {
-      router.replace("/auth/login");
-      return;
-    }
-    setUser(auth);
-    loadSessions();
-  }, [router, loadSessions]);
+    sessionsApi.getMySessions()
+      .then(setSessions)
+      .catch(() => toast.error('Failed to load sessions'))
+      .finally(() => setLoading(false));
+  }, [setSessions]);
 
-  const handleCreateSession = async () => {
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sessionTitle.trim()) return;
     setCreating(true);
     try {
-      const session: SessionResponse = await sessionApi.create();
-      toast.success("Session created! Redirecting…");
+      const session = await sessionsApi.create(sessionTitle.trim());
+      addSession(session);
+      setShowCreateModal(false);
+      setSessionTitle('');
+      toast.success('Session created!');
       router.push(`/session/${session.id}`);
     } catch {
-      toast.error("Failed to create session. Please try again.");
+      toast.error('Failed to create session');
     } finally {
       setCreating(false);
     }
   };
 
-  const handleJoinSession = async (token: string) => {
+  const handleJoin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinCode.trim()) return;
+    setJoining(true);
     try {
-      const session: SessionResponse = await sessionApi.join(token);
-      toast.success("Joined session!");
+      const session = await sessionsApi.join(joinCode.trim().toUpperCase());
+      addSession(session);
+      setShowJoinModal(false);
+      setJoinCode('');
+      toast.success('Joined session!');
       router.push(`/session/${session.id}`);
     } catch {
-      toast.error("Session not found or already ended.");
+      toast.error('Invalid or expired session code');
+    } finally {
+      setJoining(false);
     }
   };
 
-  const handleCopyToken = (token: string) => {
-    navigator.clipboard.writeText(token).then(() => {
-      toast.success("Invite token copied to clipboard!");
-    }).catch(() => {
-      toast.error("Failed to copy token.");
-    });
-  };
+  const getStatusColor = (status: Session['status']) =>
+    ({ WAITING: 'text-amber-400 bg-amber-400/10', ACTIVE: 'text-emerald-400 bg-emerald-400/10', ENDED: 'text-white/30 bg-white/5' }[status]);
 
-  const handleLogout = () => {
-    clearAuth();
-    toast("Signed out. See you soon! 👋", { icon: "👋" });
-    router.push("/auth/login");
-  };
-
-  // Stats
-  const stats = {
-    total: sessions.length,
-    active: sessions.filter((s) => s.status === "ACTIVE").length,
-    pending: sessions.filter((s) => s.status === "PENDING").length,
-    completed: sessions.filter((s) => s.status === "ENDED").length,
-  };
-
-  if (!user) return null;
+  const activeSessions = sessions.filter(s => s.status !== 'ENDED');
+  const pastSessions = sessions.filter(s => s.status === 'ENDED');
 
   return (
-    <div className="min-h-screen bg-gray-950 relative">
-      {/* Background gradient */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-indigo-900/20 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 -left-40 w-96 h-96 bg-purple-900/15 rounded-full blur-3xl" />
+    <div className="p-8 max-w-5xl mx-auto">
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
+        <p className="text-white/40 text-sm mb-1">Good to see you,</p>
+        <h1 className="font-display font-700 text-3xl text-white tracking-tight">{user?.name}</h1>
+      </motion.div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-10">
+        {[
+          { label: 'Total Sessions', value: sessions.length, icon: Clock },
+          { label: 'Active Now', value: activeSessions.length, icon: Users },
+          { label: 'Completed', value: pastSessions.length, icon: Code2 },
+        ].map((stat, i) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.07 }}
+            className="glass rounded-2xl p-5 border border-white/8"
+          >
+            <stat.icon size={16} className="text-brand-400 mb-3" />
+            <div className="font-display font-700 text-2xl text-white">{stat.value}</div>
+            <div className="text-xs text-white/40 mt-0.5">{stat.label}</div>
+          </motion.div>
+        ))}
       </div>
 
-      {/* Navbar */}
-      <nav className="relative z-10 border-b border-gray-800/60 bg-gray-950/80 backdrop-blur-md sticky top-0">
-        <div className="max-w-6xl mx-auto px-6 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center glow-indigo-sm">
-              <HiSparkles className="text-white text-sm" />
-            </div>
-            <span className="font-bold text-lg gradient-text">CodeMenti</span>
-            <span className="px-2 py-0.5 text-xs rounded-full bg-indigo-600/20 text-indigo-300 border border-indigo-600/30">
-              {user.role}
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-gray-300 text-sm hidden sm:block">{user.name}</span>
-            </div>
-            <motion.button
-              onClick={handleLogout}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-gray-800"
-            >
-              <HiLogout className="text-base" />
-              <span className="hidden sm:block">Sign out</span>
-            </motion.button>
-          </div>
-        </div>
-      </nav>
-
-      <main className="relative z-10 max-w-6xl mx-auto px-6 py-8">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+      {/* Actions */}
+      <div className="flex gap-3 mb-8">
+        {user?.role === 'MENTOR' && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-400 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-brand-500/20"
+          >
+            <Plus size={16} /> New Session
+          </button>
+        )}
+        <button
+          onClick={() => setShowJoinModal(true)}
+          className="flex items-center gap-2 px-5 py-2.5 glass hover:bg-white/8 text-white rounded-xl text-sm font-semibold transition-all border border-white/10"
         >
-          <h1 className="text-2xl font-bold text-white">
-            Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"},{" "}
-            <span className="gradient-text">{user.name.split(" ")[0]}</span> 👋
-          </h1>
-          <p className="text-gray-400 mt-1">
-            {user.role === "MENTOR" ? "Ready to inspire? Create a new session to get started." : "Ready to learn? Join a session or view your history."}
+          <LogIn size={16} /> Join Session
+        </button>
+      </div>
+
+      {/* Sessions List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="animate-spin text-brand-400" size={24} />
+        </div>
+      ) : sessions.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="glass rounded-2xl p-12 text-center border border-white/8 border-dashed"
+        >
+          <Code2 size={32} className="text-white/20 mx-auto mb-4" />
+          <p className="text-white/40 text-sm">No sessions yet.</p>
+          <p className="text-white/25 text-xs mt-1">
+            {user?.role === 'MENTOR' ? 'Create your first session to get started.' : 'Join a session using a session code.'}
           </p>
         </motion.div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { icon: <HiChartBar className="text-indigo-400" />, label: "Total Sessions", value: stats.total, color: "bg-indigo-600/10" },
-            { icon: <HiVideoCamera className="text-green-400" />, label: "Active", value: stats.active, color: "bg-green-600/10" },
-            { icon: <HiExclamationCircle className="text-yellow-400" />, label: "Pending", value: stats.pending, color: "bg-yellow-600/10" },
-            { icon: <HiCheckCircle className="text-gray-400" />, label: "Completed", value: stats.completed, color: "bg-gray-600/10" },
-          ].map((stat, i) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-            >
-              <StatCard {...stat} />
-            </motion.div>
-          ))}
+      ) : (
+        <div className="space-y-8">
+          {activeSessions.length > 0 && (
+            <div>
+              <h2 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-4">Active Sessions</h2>
+              <div className="space-y-2">
+                {activeSessions.map((s, i) => (
+                  <SessionCard key={s.id} session={s} index={i} getStatusColor={getStatusColor} />
+                ))}
+              </div>
+            </div>
+          )}
+          {pastSessions.length > 0 && (
+            <div>
+              <h2 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-4">Past Sessions</h2>
+              <div className="space-y-2">
+                {pastSessions.map((s, i) => (
+                  <SessionCard key={s.id} session={s} index={i} getStatusColor={getStatusColor} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+      )}
 
-        {/* Action Cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-10"
-        >
-          {user.role === "MENTOR" && (
-            <div className="relative group overflow-hidden rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-900/30 to-purple-900/20 p-6 hover:border-indigo-500/40 transition-all duration-300">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/10 rounded-full blur-2xl transform translate-x-8 -translate-y-8" />
-              <div className="relative">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2.5 rounded-xl bg-indigo-600/20 border border-indigo-500/30">
-                    <HiPlus className="text-indigo-400 text-lg" />
-                  </div>
-                  <h2 className="text-base font-semibold text-white">Start a New Session</h2>
-                </div>
-                <p className="text-gray-400 text-sm mb-4 leading-relaxed">
-                  Create a private collaborative room with code editor, video, and chat.
-                </p>
-                <motion.button
-                  onClick={handleCreateSession}
-                  disabled={creating}
-                  whileHover={{ scale: creating ? 1 : 1.01 }}
-                  whileTap={{ scale: creating ? 1 : 0.99 }}
-                  className="btn-primary w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-60 text-white font-semibold text-sm transition-all shadow-lg"
-                >
-                  {creating ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Creating…
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center gap-2">
-                      <HiPlus />
-                      Create Session
-                    </span>
-                  )}
-                </motion.button>
-              </div>
+      {/* Create Modal */}
+      {showCreateModal && (
+        <Modal onClose={() => setShowCreateModal(false)} title="New Session">
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div>
+              <label className="block text-xs text-white/50 uppercase tracking-wider mb-2">Session Title</label>
+              <input
+                autoFocus
+                type="text"
+                placeholder="e.g. React Hooks Deep Dive"
+                value={sessionTitle}
+                onChange={e => setSessionTitle(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-500/60 transition-all"
+              />
             </div>
-          )}
-
-          <div className="relative group overflow-hidden rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-900/30 to-indigo-900/20 p-6 hover:border-purple-500/40 transition-all duration-300">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-full blur-2xl transform translate-x-8 -translate-y-8" />
-            <div className="relative">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-2.5 rounded-xl bg-purple-600/20 border border-purple-500/30">
-                  <HiUsers className="text-purple-400 text-lg" />
-                </div>
-                <h2 className="text-base font-semibold text-white">Join a Session</h2>
-              </div>
-              <p className="text-gray-400 text-sm mb-4 leading-relaxed">
-                Enter the invite token shared by your mentor to join their session.
-              </p>
-              <motion.button
-                onClick={() => setShowJoinModal(true)}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                className="btn-primary w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold text-sm transition-all shadow-lg flex items-center justify-center gap-2"
-              >
-                <HiCode />
-                Join with Token
-              </motion.button>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowCreateModal(false)}
+                className="flex-1 py-2.5 glass hover:bg-white/8 text-white/70 rounded-xl text-sm font-medium transition-all border border-white/10">
+                Cancel
+              </button>
+              <button type="submit" disabled={creating}
+                className="flex-1 py-2.5 bg-brand-500 hover:bg-brand-400 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2">
+                {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                Create
+              </button>
             </div>
-          </div>
-        </motion.div>
-
-        {/* Sessions List */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Your Sessions</h2>
-            {sessions.length > 0 && (
-              <span className="text-xs text-gray-500">{sessions.length} session{sessions.length !== 1 ? "s" : ""}</span>
-            )}
-          </div>
-
-          {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
-            </div>
-          ) : sessions.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-16 rounded-2xl border border-dashed border-gray-800"
-            >
-              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-800/50 flex items-center justify-center">
-                <HiCode className="text-3xl text-gray-600" />
-              </div>
-              <p className="text-gray-400 font-medium">No sessions yet</p>
-              <p className="text-gray-600 text-sm mt-1">
-                {user.role === "MENTOR" ? "Create your first session above" : "Join a session using an invite token"}
-              </p>
-            </motion.div>
-          ) : (
-            <div className="space-y-3">
-              {sessions.map((session, i) => (
-                <motion.div
-                  key={session.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                >
-                  <SessionCard
-                    session={session}
-                    userId={user.userId}
-                    onCopyToken={handleCopyToken}
-                  />
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-      </main>
+          </form>
+        </Modal>
+      )}
 
       {/* Join Modal */}
-      <AnimatePresence>
-        {showJoinModal && (
-          <JoinModal
-            onClose={() => setShowJoinModal(false)}
-            onJoin={handleJoinSession}
-          />
-        )}
-      </AnimatePresence>
+      {showJoinModal && (
+        <Modal onClose={() => setShowJoinModal(false)} title="Join Session">
+          <form onSubmit={handleJoin} className="space-y-4">
+            <div>
+              <label className="block text-xs text-white/50 uppercase tracking-wider mb-2">Session Code</label>
+              <div className="relative">
+                <Hash size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="e.g. ABC12XYZ"
+                  value={joinCode}
+                  onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                  maxLength={8}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/25 font-mono uppercase tracking-widest focus:outline-none focus:border-brand-500/60 transition-all"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowJoinModal(false)}
+                className="flex-1 py-2.5 glass hover:bg-white/8 text-white/70 rounded-xl text-sm font-medium transition-all border border-white/10">
+                Cancel
+              </button>
+              <button type="submit" disabled={joining}
+                className="flex-1 py-2.5 bg-brand-500 hover:bg-brand-400 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2">
+                {joining ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={14} />}
+                Join
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function SessionCard({ session, index, getStatusColor }: {
+  session: Session;
+  index: number;
+  getStatusColor: (s: Session['status']) => string;
+}) {
+  const router = useRouter();
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.04 }}
+      onClick={() => router.push(`/session/${session.id}`)}
+      className="glass rounded-xl px-5 py-4 border border-white/8 hover:bg-white/6 hover:border-white/12 cursor-pointer transition-all group flex items-center gap-4"
+    >
+      <div className="w-9 h-9 rounded-lg bg-brand-500/15 flex items-center justify-center flex-shrink-0">
+        <Code2 size={16} className="text-brand-300" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-white truncate">{session.title}</div>
+        <div className="text-xs text-white/35 mt-0.5">
+          {session.mentor.name} · {formatDistanceToNow(new Date(session.createdAt), { addSuffix: true })}
+        </div>
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${getStatusColor(session.status)}`}>
+          {session.status}
+        </span>
+        <span className="font-mono text-xs text-white/25 bg-white/5 px-2 py-1 rounded-lg">{session.sessionCode}</span>
+        <ArrowRight size={14} className="text-white/20 group-hover:text-white/50 transition-colors" />
+      </div>
+    </motion.div>
+  );
+}
+
+function Modal({ children, onClose, title }: { children: React.ReactNode; onClose: () => void; title: string }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="relative glass-strong rounded-2xl p-6 w-full max-w-sm border border-white/12 shadow-2xl"
+      >
+        <h3 className="font-display font-700 text-lg text-white mb-5">{title}</h3>
+        {children}
+      </motion.div>
     </div>
   );
 }

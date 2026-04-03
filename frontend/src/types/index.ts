@@ -1,57 +1,95 @@
-export type Role = "MENTOR" | "STUDENT";
-export type SessionStatus = "PENDING" | "ACTIVE" | "ENDED";
+// Auth
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'MENTOR' | 'STUDENT';
+  avatarUrl?: string;
+}
 
 export interface AuthResponse {
   token: string;
+  tokenType: string;
+  user: User;
+}
+
+export interface LoginRequest {
   email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
   name: string;
-  role: Role;
-  userId: number;
+  email: string;
+  password: string;
+  role: 'MENTOR' | 'STUDENT';
 }
 
-export interface SessionResponse {
-  id: number;
-  mentorId: number;
-  mentorName: string;
-  studentId: number | null;
-  studentName: string | null;
-  status: SessionStatus;
-  inviteToken: string;
+// Session
+export interface Session {
+  id: string;
+  title: string;
+  sessionCode: string;
+  status: 'WAITING' | 'ACTIVE' | 'ENDED';
+  mentor: User;
+  student?: User;
   createdAt: string;
-  endedAt: string | null;
+  startedAt?: string;
+  endedAt?: string;
 }
 
-export interface MessageResponse {
-  id: number;
-  sessionId: number;
-  senderId: number;
-  senderName: string;
-  content: string;
-  createdAt: string;
-}
-
+// Chat
 export interface ChatMessage {
-  sessionId: number;
-  senderId: number;
+  type: 'CHAT' | 'JOIN' | 'LEAVE';
+  sessionId: string;
+  senderId: string;
   senderName: string;
+  senderRole: 'MENTOR' | 'STUDENT';
   content: string;
   timestamp: string;
-  type: "CHAT" | "JOIN" | "LEAVE";
 }
 
-export interface CodeMessage {
-  sessionId: number;
-  userId: number;
+// Code
+export interface CodeUpdate {
+  type: 'CODE_UPDATE' | 'LANGUAGE_CHANGE' | 'CURSOR_MOVE' | 'YJS_UPDATE';
+  sessionId: string;
+  senderId: string;
+  senderName: string;
+  content?: string;
+  language?: string;
+  cursorLine?: number;
+  cursorColumn?: number;
+  yUpdate?: number[];
+  timestamp: string;
+}
+
+// Signaling
+export type SignalingType =
+  | 'OFFER' | 'ANSWER' | 'ICE_CANDIDATE'
+  | 'CALL_REQUEST' | 'CALL_ACCEPTED' | 'CALL_REJECTED' | 'CALL_ENDED';
+
+export interface SignalingMessage {
+  type: SignalingType;
+  sessionId: string;
+  senderId: string;
+  senderName: string;
+  payload: RTCSessionDescriptionInit | RTCIceCandidateInit | null;
+  timestamp: string;
+}
+
+// Session events
+export interface SessionEvent {
+  type: 'USER_JOINED' | 'USER_LEFT' | 'SESSION_STARTED' | 'SESSION_ENDED';
+  sessionId: string;
+  userId: string;
   userName: string;
-  code: string;
-  language: string;
-  delta?: string;
+  userRole: 'MENTOR' | 'STUDENT';
+  timestamp: string;
 }
 
-export interface SignalMessage {
-  sessionId: number;
-  senderId: number;
-  targetId: number;
-  type: "offer" | "answer" | "ice-candidate" | "join" | "leave";
-  payload: unknown;
+// Code snapshot
+export interface CodeSnapshot {
+  content: string;
+  language: string;
+  updatedAt?: string;
 }

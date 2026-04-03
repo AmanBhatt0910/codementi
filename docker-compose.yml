@@ -1,11 +1,14 @@
+version: '3.9'
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: codementi-db
+    container_name: mentor_db
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: mentor_db
+      POSTGRES_DB: mentorplatform
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
     volumes:
@@ -20,31 +23,40 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: codementi-backend
-    environment:
-      DB_URL: jdbc:postgresql://postgres:5432/mentor_db
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${DB_PASSWORD:-secret}
-      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
-      CORS_ORIGINS: http://localhost:3000
-    ports:
-      - "8080:8080"
+    container_name: mentor_backend
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/mentorplatform
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: 5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437
+      JWT_EXPIRATION: 86400000
+      CORS_ORIGINS: http://localhost:3000
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: codementi-frontend
+    container_name: mentor_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8080
       NEXT_PUBLIC_WS_URL: http://localhost:8080/ws
     ports:
       - "3000:3000"
-    depends_on:
-      - backend
 
 volumes:
   postgres_data:
