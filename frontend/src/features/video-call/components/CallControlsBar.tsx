@@ -12,7 +12,7 @@ interface CallControlsBarProps {
 
 /**
  * Floating horizontal toolbar with mute, camera-toggle, and end-call controls.
- * All buttons meet the 44×44 px minimum touch target, have ARIA labels, and
+ * All buttons meet the 48×48 px minimum touch target, have ARIA labels, and
  * expose visible focus rings for keyboard navigation.
  */
 export function CallControlsBar({

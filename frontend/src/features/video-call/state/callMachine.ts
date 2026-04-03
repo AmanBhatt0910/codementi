@@ -1,6 +1,7 @@
 import type { CallStatus } from '../domain/types';
 
-/** Valid outbound transitions from each call state. */
+/** Valid outbound transitions from each call state.
+ *  connecting → idle represents a user-initiated cancel (cleanup is done by endCall/resetCall). */
 const VALID_TRANSITIONS: Readonly<Record<CallStatus, ReadonlyArray<CallStatus>>> = {
   idle:         ['connecting'],
   connecting:   ['active', 'disconnected', 'error', 'idle'],

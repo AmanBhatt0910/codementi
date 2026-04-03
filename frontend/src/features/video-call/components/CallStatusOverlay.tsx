@@ -1,4 +1,5 @@
 'use client';
+// Note: `ring-pulse` is a custom animation defined in src/app/globals.css.
 import { PhoneCall, PhoneIncoming, PhoneOff, AlertCircle, Phone, X, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CallParticipant, CallStatus } from '../domain/types';
