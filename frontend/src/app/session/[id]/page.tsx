@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
@@ -8,7 +8,7 @@ import { sessionsApi } from '@/lib/api';
 import { useStomp } from '@/hooks/useStomp';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { ChatMessage, CodeUpdate, SessionEvent, SignalingMessage } from '@/types';
-import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
+import { CollaborativeEditor, CollaborativeEditorHandle } from '@/components/editor/CollaborativeEditor';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { VideoPanel } from '@/components/video/VideoPanel';
 import { SessionHeader } from '@/components/layout/SessionHeader';
@@ -28,6 +28,7 @@ export default function SessionPage() {
 
   const [loading, setLoading] = useState(true);
   const [codeCopied, setCodeCopied] = useState(false);
+  const editorRef = useRef<CollaborativeEditorHandle>(null);
 
   // Load session + history on mount
   useEffect(() => {
@@ -62,6 +63,9 @@ export default function SessionPage() {
     const u = update as CodeUpdate;
     if (u.senderId !== user?.id) {
       setCodeSnapshot({ content: u.content, language: u.language });
+      if (u.content !== undefined) {
+        editorRef.current?.applyRemoteUpdate(u.content, u.language);
+      }
     }
   }, [user?.id, setCodeSnapshot]);
 
@@ -145,6 +149,7 @@ export default function SessionPage() {
         <div className="flex flex-col overflow-hidden border-r border-white/6">
           <div className="flex-1 overflow-hidden">
             <CollaborativeEditor
+              ref={editorRef}
               sessionId={id}
               userId={user?.id || ''}
               userName={user?.name || ''}
