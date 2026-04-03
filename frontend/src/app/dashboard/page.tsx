@@ -14,6 +14,13 @@ import { getAuth, clearAuth } from "@/lib/auth";
 import { sessionApi } from "@/lib/apiClient";
 import { SessionResponse, AuthResponse } from "@/types";
 
+function formatDate(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 // Skeleton card for loading state
 function SkeletonCard() {
   return (
@@ -92,12 +99,12 @@ function SessionCard({ session, userId, onCopyToken }: {
                 ? session.studentName ? `With ${session.studentName}` : "Waiting for student…"
                 : `With ${session.mentorName}`}
             </p>
-            {session.createdAt && (() => { const d = new Date(session.createdAt); return isNaN(d.getTime()) ? null : (
+            {formatDate(session.createdAt) && (
               <p className="text-gray-600 text-xs mt-0.5 flex items-center gap-1">
                 <HiClock className="text-xs" />
-                {d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                {formatDate(session.createdAt)}
               </p>
-            ); })()}
+            )}
           </div>
         </div>
 

@@ -19,6 +19,13 @@ import {
 } from "@/lib/websocket";
 import { SessionResponse, ChatMessage, MessageResponse, AuthResponse } from "@/types";
 
+function formatTime(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+}
+
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
 const LANGUAGES = [
@@ -689,11 +696,11 @@ export default function SessionPage() {
                         <p className="text-xs font-semibold text-indigo-400 mb-0.5">{msg.senderName}</p>
                       )}
                       <p className="text-sm break-words leading-relaxed">{msg.content}</p>
-                      {msg.timestamp && (() => { const d = new Date(msg.timestamp); return isNaN(d.getTime()) ? null : (
+                      {formatTime(msg.timestamp) && (
                         <p className={`text-xs mt-0.5 ${isMe ? "text-white/50" : "text-gray-500"}`}>
-                          {d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                          {formatTime(msg.timestamp)}
                         </p>
-                      ); })()}
+                      )}
                     </div>
                   </motion.div>
                 );
