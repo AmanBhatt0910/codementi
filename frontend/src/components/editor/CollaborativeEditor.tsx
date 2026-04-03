@@ -2,8 +2,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { editor } from 'monaco-editor';
-import * as Y from 'yjs';
-import { MonacoBinding } from 'y-monaco';
+import type * as Y from 'yjs';
+import type { MonacoBinding } from 'y-monaco';
 import { ChevronDown, Code2 } from 'lucide-react';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
@@ -48,54 +48,92 @@ export function CollaborativeEditor({
   const [showLangDropdown, setShowLangDropdown] = useState(false);
   const [wordWrap, setWordWrap] = useState<'on' | 'off'>('off');
 
-  // Initialize Yjs
+  // Initialize Yjs — dynamically imported to avoid SSR window errors
   useEffect(() => {
-    const ydoc = new Y.Doc();
-    ydocRef.current = ydoc;
+    let cancelled = false;
+    let ydoc: Y.Doc | null = null;
+    let yTextObserver: (() => void) | null = null;
 
-    // Observe changes from Yjs to broadcast
-    const yText = ydoc.getText('monaco');
-    const observer = () => {
-      if (isRemoteUpdateRef.current) return;
-      const content = yText.toString();
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        onCodeChange(content, language);
-      }, 500);
-    };
-    yText.observe(observer);
+    (async () => {
+      const Y = await import('yjs');
+      if (cancelled) return;
+
+      ydoc = new Y.Doc();
+      ydocRef.current = ydoc;
+
+      // Observe changes from Yjs to broadcast
+      const yText = ydoc.getText('monaco');
+      yTextObserver = () => {
+        if (isRemoteUpdateRef.current) return;
+        const content = yText.toString();
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          onCodeChange(content, language);
+        }, 500);
+      };
+      yText.observe(yTextObserver);
+
+      // If the editor already mounted before Yjs resolved, create the binding now
+      const editorInstance = editorRef.current;
+      if (editorInstance && !cancelled) {
+        if (initialContent && yText.toString() === '') {
+          ydoc.transact(() => {
+            yText.insert(0, initialContent);
+          });
+        }
+        const monacoModel = editorInstance.getModel();
+        if (monacoModel) {
+          const { MonacoBinding } = await import('y-monaco');
+          if (!cancelled) {
+            bindingRef.current = new MonacoBinding(yText, monacoModel, new Set([editorInstance]), undefined);
+          }
+        }
+      }
+    })();
 
     return () => {
-      yText.unobserve(observer);
+      cancelled = true;
+      if (yTextObserver && ydocRef.current) {
+        const yText = ydocRef.current.getText('monaco');
+        yText.unobserve(yTextObserver);
+      }
       bindingRef.current?.destroy();
-      ydoc.destroy();
+      bindingRef.current = null;
+      ydocRef.current?.destroy();
+      ydocRef.current = null;
     };
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEditorMount = useCallback((editorInstance: editor.IStandaloneCodeEditor) => {
     editorRef.current = editorInstance;
     const ydoc = ydocRef.current;
-    if (!ydoc) return;
 
-    const yText = ydoc.getText('monaco');
+    if (ydoc) {
+      const yText = ydoc.getText('monaco');
 
-    // Set initial content
-    if (initialContent && yText.toString() === '') {
-      ydoc.transact(() => {
-        yText.insert(0, initialContent);
-      });
+      // Set initial content
+      if (initialContent && yText.toString() === '') {
+        ydoc.transact(() => {
+          yText.insert(0, initialContent);
+        });
+      }
+
+      // Create binding
+      const monacoModel = editorInstance.getModel();
+      if (monacoModel && !bindingRef.current) {
+        import('y-monaco').then(({ MonacoBinding }) => {
+          // Guard: ydoc must still be alive and no binding created in the meantime
+          if (!ydocRef.current || bindingRef.current) return;
+          bindingRef.current = new MonacoBinding(
+            yText,
+            monacoModel,
+            new Set([editorInstance]),
+            undefined
+          );
+        });
+      }
     }
-
-    // Create binding
-    const monacoModel = editorInstance.getModel();
-    if (monacoModel) {
-      bindingRef.current = new MonacoBinding(
-        yText,
-        monacoModel,
-        new Set([editorInstance]),
-        undefined
-      );
-    }
+    // If ydoc is not yet ready, the Yjs useEffect will create the binding once it resolves
 
     // Editor settings
     editorInstance.updateOptions({
